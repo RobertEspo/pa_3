@@ -1,0 +1,158 @@
+---
+title: "Programming assignment 3"
+format: gfm
+date: last-modified
+date-format: iso
+---
+## Load libraries & data
+```{r}
+library(here)
+library(tidyverse)
+library(ggforce)
+
+dat <- read_csv(here("data","vowel_data.csv"))
+```
+
+## Section 7
+
+The following code is from the Praat script `extract_vals.praat`.
+
+```
+vonset = Get starting point: 2, 2
+voffset = Get end point: 2, 2
+durationV = voffset - vonset
+per20 = vonset + (durationV * 0.20)
+per35 = vonset + (durationV * 0.35)
+per50 = vonset + (durationV * 0.50)
+per65 = vonset + (durationV * 0.65)
+per80 = vonset + (durationV * 0.80)
+```
+
+This code first finds the target vowel's onset and offset, and then calculates the vowel duration. From there, it calculates five points within the vowel at 20%, 35%, 50%, 65%, and 80% of the vowel duration. It does this by adding the vowel onset (the "real" time at which the vowel begins in the audio file) to 20%/35%/50%/65%/80% of the vowel's duration. I use fake numbers below to demonstrate finding where to extract values for the 20% point:
+
+```
+vonset = 1500
+voffset = 1550
+durationV = 50
+
+per20 = vonset + (durationV * 0.20)
+per20 = 1500 + (50 * 0.20)
+per20 = 1500 + 10
+per20 = 1510
+```
+
+The vowel onset is at 1500 seconds into the audio file, and the vowel offset at 1550 seconds. The duration of the vowel is thus 50 seconds. To get the 20% point of the vowel, we must calculate 20% of the duration (50 * 0.20 = 10). Then we must add that value to the vowel onset (1500) so that we can find the point in the audio file at which to extract our desired values.
+
+In pa_2, we had a "master" .wav file that we divided into various files. In this assignment, we worked only with the "master" file throughout the entire procedure. By working with a single master file, we can save time by not needing to go on opening and closing various files, which can become burdensome if there are many files. However, if the master file becomes too large, it can become unwieldy to work with, especially in Praat. A mistake at some point within the .TextGrid, for example, may become very hard to identify.
+
+## Descriptive Stats
+```{r}
+dat %>%
+  group_by(vowel,language) %>%
+  summarize(f1_cent_avg = mean(f1_cent),
+            f1_cent_sd = sd(f1_cent),
+            f2_cent_avg = mean(f2_cent),
+            f2_cent_sd = sd(f2_cent),
+            tl_avg = mean(tl),
+            tl_sd = sd(tl))
+```
+
+## Plots
+```{r}
+# Trajectory length as a function of vowel and language
+dat %>%
+  ggplot() +
+  aes(x = vowel, y = tl, color = language) +
+  geom_boxplot()
+
+# F1 as a function of vowel and language
+dat %>%
+  ggplot() +
+  aes(x = f1_cent, fill = language) +
+  facet_wrap(. ~ vowel) +
+  geom_histogram(alpha=.5)
+
+# F2 as a function of vowel and language
+dat %>%
+  ggplot() +
+  aes(x = f2_cent, fill = language) +
+  facet_wrap(. ~ vowel) +
+  geom_histogram(alpha=.5)
+
+```
+
+For the spectral centroids plot, I noticed that the F2 values for my vowel [i] from 'quito' was VERY wrong (it was giving me f2 values of about 1200 Hz, when it should've been about 2400 Hz as I saw in Praat). I decided to consult ChatGPT and it suggested modifying this part of the Praat script:
+
+```
+do ("To Formant (burg)...", 0, 5, 5500, 0.025, 30)
+```
+
+Originally, it had a ceiling of 4800; I modified it to 5500. This fixed my issue. However, I'm not sure about the consequences! It makes me think of when you're looking at the pitch track and need to adjust the range, but I'm not sure that's an equivalent comparison.
+
+```{r}
+# (Bonus) Plot spectral centroids in F1/F2 vowel space
+
+dat %>%
+  ggplot() +
+  aes(x = f2_cent, y = f1_cent, color = language) +
+  geom_text(aes(label=item,color=language),alpha=0.7,size=3) +
+  geom_mark_ellipse(aes(fill = language,
+                        group = interaction(vowel,language)),
+                    expand=0, alpha=0.15, show.legend=FALSE) +
+  scale_x_reverse() +
+  scale_y_reverse()
+```
+
+I don't have the caught/cot merger, so only the word "bot" is comparable to my Spanish /a/ :-) The rest of the words in that group, I pronounce with /ɔ/.
+
+
+```{r}
+# (Bonus) Plot trajectory length in F1/F2 vowel space
+
+dat_long <- dat %>%
+  select(-f1_cent,-f2_cent) %>%
+  pivot_longer(
+    cols = starts_with("f1_") | starts_with("f2_"),
+    names_to = c("formant", "percent"),
+    names_pattern = "(f[12])_(\\d+)",
+    values_to = "Hz"
+  ) %>%
+  pivot_wider(
+    names_from = formant,
+    values_from = Hz
+  ) %>%
+  mutate(percent = as.numeric(percent))
+
+dat_long %>%
+  ggplot(aes(x = f2, y = f1,
+                     color = language,
+                     group = vowel)) +
+  geom_text(aes(label=percent)) +
+  geom_line(aes(group = interaction(language,item))) +
+  facet_wrap(. ~ vowel) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  theme_minimal() +
+  labs(x = "F2 (Hz)", y = "F1 (Hz)",
+       shape = "Percent", color = "Language",
+       title = "Formant Trajectories by Vowel and Language")
+
+
+# Here are averages, because the other plot seems really messy.
+dat_long %>%
+  group_by(vowel,language,percent) %>%
+  summarize(f1_avg = mean(f1),
+            f2_avg = mean(f2)) %>%
+  ggplot(aes(x = f2_avg, y = f1_avg,
+                     color = language,
+                     group = vowel)) +
+  geom_text(aes(label=percent)) +
+  geom_line(aes(group = interaction(vowel,language))) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  theme_minimal() +
+  labs(x = "F2 (Hz)", y = "F1 (Hz)",
+       shape = "Percent", color = "Language",
+       title = "Formant Trajectories by Vowel and Language")
+
+```
