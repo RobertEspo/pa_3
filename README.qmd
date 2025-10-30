@@ -134,7 +134,7 @@ dat_long %>%
   scale_y_reverse() +
   theme_minimal() +
   labs(x = "F2 (Hz)", y = "F1 (Hz)",
-       shape = "Percent", color = "Language",
+       color = "Language",
        title = "Formant Trajectories by Vowel and Language")
 
 
@@ -152,7 +152,7 @@ dat_long %>%
   scale_y_reverse() +
   theme_minimal() +
   labs(x = "F2 (Hz)", y = "F1 (Hz)",
-       shape = "Percent", color = "Language",
+       color = "Language",
        title = "Formant Trajectories by Vowel and Language")
 
 ```
